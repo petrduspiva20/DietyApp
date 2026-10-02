@@ -15,7 +15,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
 
       - name: Install dependencies
         run: |
@@ -27,14 +27,24 @@ jobs:
           cd ios
           pod install
 
-      - name: Build Unsigned IPA
+      - name: Build App Bundle
         run: |
           cd ios
-          SCHEME_NAME=$(xcodebuild -list -json | grep -A 10 "schemes" | head -n 2 | tail -n 1 | tr -d '", ')
-          echo "Building scheme: $SCHEME_NAME"
-          xcodebuild -workspace *.xcworkspace -scheme "$SCHEME_NAME" -configuration Release -sdk iphoneos CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO clean build
+          xcodebuild -workspace *.xcworkspace \
+                     -scheme DietyApp \
+                     -configuration Release \
+                     -sdk iphoneos \
+                     -derivedDataPath build \
+                     CODE_SIGNING_ALLOWED=NO \
+                     CODE_SIGNING_REQUIRED=NO \
+                     CODE_SIGN_IDENTITY="" \
+                     PROVISIONING_PROFILE_SPECIFIER=""
+
+      - name: Package IPA
+        run: |
+          cd ios
           mkdir -p Payload
-          mv build/Release-iphoneos/*.app Payload/
+          cp -R build/Build/Products/Release-iphoneos/*.app Payload/
           zip -r DietyApp.ipa Payload
 
       - name: Upload IPA Artifact
