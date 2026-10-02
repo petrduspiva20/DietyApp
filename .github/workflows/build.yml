@@ -28,14 +28,15 @@ jobs:
           pod install
 
       - name: Build with Xcode
-        env:
-          NODE_OPTIONS: "--max-old-space-size=4096"
         run: |
           cd ios
+          NODE_PATH=$(which node)
+          echo "Node path: $NODE_PATH"
           xcodebuild -workspace *.xcworkspace \
                      -scheme DietyApp \
                      -configuration Release \
                      -sdk iphoneos \
+                     NODE_BINARY="$NODE_PATH" \
                      CODE_SIGN_IDENTITY="" \
                      CODE_SIGNING_REQUIRED=NO \
                      CODE_SIGNING_ALLOWED=NO \
