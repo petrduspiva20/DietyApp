@@ -5,27 +5,20 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.petrduspiva.dietyapp"
+      "bundleIdentifier": "com.petrduspiva.dietyapp",
       "infoPlist": {
         "UIBackgroundModes": [
           "location",
-          "fetch",
-          "location",
           "fetch"
-        ],
-        "NSLocationWhenInUseUsageDescription": "Aplikace potřebuje přístup k GPS pro detekci polohy a přejezdů.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Aplikace potřebuje sledovat polohu na pozadí pro automatický výpočet diet.",
-        "NSLocationAlwaysUsageDescription": "Aplikace potřebuje sledovat polohu na pozadí pro automatický výpočet diet.",
-        "ITSAppUsesNonExemptEncryption": false
-      }
-    },
-    "android": {
-      "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png"
+        ]
       }
     },
     "web": {
