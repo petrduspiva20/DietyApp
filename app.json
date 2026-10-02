@@ -8,7 +8,7 @@
     "userInterfaceStyle": "dark",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.diety.app",
+      "bundleIdentifier": "com.petrduspiva.dietyapp"
       "infoPlist": {
         "UIBackgroundModes": [
           "location",
