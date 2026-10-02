@@ -1,0 +1,37 @@
+name: Build iOS IPA
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Install Expo CLI and dependencies
+        run: |
+          npm install
+          npx expo prebuild --platform ios
+
+      - name: Build Unsigned IPA
+        run: |
+          cd ios
+          xcodebuild -workspace *.xcworkspace -scheme DietyApp -configuration Release -sdk iphoneos CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO clean build
+          mkdir -p Payload
+          mv build/Release-iphoneos/*.app Payload/
+          zip -r DietyApp.ipa Payload
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: DietyApp-Unsigned
+          path: ios/DietyApp.ipa
