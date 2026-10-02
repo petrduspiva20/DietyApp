@@ -20,31 +20,31 @@ jobs:
       - name: Install dependencies
         run: |
           npm install
-          npx expo prebuild --platform ios
+          npx expo prebuild --platform ios --clean
 
       - name: Install CocoaPods
         run: |
           cd ios
           pod install
 
-      - name: Build Xcode Archive
+      - name: Build with Xcode
         run: |
           cd ios
           xcodebuild -workspace *.xcworkspace \
                      -scheme DietyApp \
                      -configuration Release \
                      -sdk iphoneos \
-                     -archivePath DietyApp.xcarchive \
-                     CODE_SIGNING_ALLOWED=NO \
-                     CODE_SIGNING_REQUIRED=NO \
                      CODE_SIGN_IDENTITY="" \
-                     archive
+                     CODE_SIGNING_REQUIRED=NO \
+                     CODE_SIGNING_ALLOWED=NO \
+                     COMPILER_INDEX_STORE_ENABLE=NO \
+                     build
 
       - name: Package IPA
         run: |
           cd ios
           mkdir -p Payload
-          cp -R DietyApp.xcarchive/Products/Applications/*.app Payload/
+          cp -R build/Release-iphoneos/*.app Payload/ 2>/dev/null || cp -R build/Build/Products/Release-iphoneos/*.app Payload/
           zip -r DietyApp.ipa Payload
 
       - name: Upload IPA Artifact
