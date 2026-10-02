@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: macos-14
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -16,10 +16,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'npm'
 
       - name: Install dependencies
         run: |
-          npm install
+          npm ci || npm install
           npx expo prebuild --platform ios --clean
 
       - name: Install CocoaPods
@@ -27,35 +28,24 @@ jobs:
           cd ios
           pod install
 
-      - name: Pre-bundle React Native Code
-        run: |
-          mkdir -p ios/main.jsbundle
-          npx react-native bundle \
-            --entry-file index.js \
-            --platform ios \
-            --dev false \
-            --bundle-output ios/main.jsbundle \
-            --assets-dest ios/
-
-      - name: Build with Xcode
-        env:
-          SKIP_BUNDLING: 1
+      - name: Build Xcode Project
         run: |
           cd ios
-          xcodebuild -workspace *.xcworkspace \
-                     -scheme DietyApp \
-                     -configuration Release \
-                     -sdk iphoneos \
-                     CODE_SIGN_IDENTITY="" \
-                     CODE_SIGNING_REQUIRED=NO \
-                     CODE_SIGNING_ALLOWED=NO \
-                     build
+          xcodebuild archive \
+            -workspace *.xcworkspace \
+            -scheme DietyApp \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath build/DietyApp.xcarchive \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
 
-      - name: Package IPA
+      - name: Create Unsigned IPA
         run: |
           cd ios
           mkdir -p Payload
-          cp -R build/Build/Products/Release-iphoneos/*.app Payload/ 2>/dev/null || cp -R build/Release-iphoneos/*.app Payload/
+          cp -r build/DietyApp.xcarchive/Products/Applications/*.app Payload/
           zip -r DietyApp.ipa Payload
 
       - name: Upload IPA Artifact
