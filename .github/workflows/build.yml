@@ -17,17 +17,20 @@ jobs:
         with:
           node-version: 20
 
-      - name: Link Node binary globally for Xcode
-        run: |
-          NODE_PATH=$(which node)
-          sudo mkdir -p /usr/local/bin
-          sudo ln -sf $NODE_PATH /usr/local/bin/node
-          echo "NODE_BINARY=$NODE_PATH" >> $GITHUB_ENV
-
       - name: Install dependencies
         run: |
           npm install
           npx expo prebuild --platform ios --clean
+
+      - name: Export JS Bundle before Xcode
+        run: |
+          mkdir -p ios/main.jsbundle
+          npx expo export:embed \
+            --platform ios \
+            --dev false \
+            --entry-file node_modules/expo/AppEntry.js \
+            --bundle-output ios/main.jsbundle \
+            --assets-dest ios/
 
       - name: Install CocoaPods
         run: |
@@ -43,7 +46,7 @@ jobs:
             -configuration Release \
             -sdk iphoneos \
             -archivePath build/DietyApp.xcarchive \
-            NODE_BINARY="${{ env.NODE_BINARY }}" \
+            SKIP_BUNDLING=1 \
             ENABLE_USER_SCRIPT_SANDBOXING=NO \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
