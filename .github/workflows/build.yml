@@ -28,6 +28,8 @@ jobs:
           pod install
 
       - name: Build with Xcode
+        env:
+          NODE_OPTIONS: "--max-old-space-size=4096"
         run: |
           cd ios
           xcodebuild -workspace *.xcworkspace \
@@ -37,14 +39,13 @@ jobs:
                      CODE_SIGN_IDENTITY="" \
                      CODE_SIGNING_REQUIRED=NO \
                      CODE_SIGNING_ALLOWED=NO \
-                     COMPILER_INDEX_STORE_ENABLE=NO \
                      build
 
       - name: Package IPA
         run: |
           cd ios
           mkdir -p Payload
-          cp -R build/Release-iphoneos/*.app Payload/ 2>/dev/null || cp -R build/Build/Products/Release-iphoneos/*.app Payload/
+          cp -R build/Build/Products/Release-iphoneos/*.app Payload/ 2>/dev/null || cp -R build/Release-iphoneos/*.app Payload/
           zip -r DietyApp.ipa Payload
 
       - name: Upload IPA Artifact
