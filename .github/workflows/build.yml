@@ -17,15 +17,22 @@ jobs:
         with:
           node-version: 18
 
-      - name: Install Expo CLI and dependencies
+      - name: Install dependencies
         run: |
           npm install
           npx expo prebuild --platform ios
 
+      - name: Install CocoaPods
+        run: |
+          cd ios
+          pod install
+
       - name: Build Unsigned IPA
         run: |
           cd ios
-          xcodebuild -workspace *.xcworkspace -scheme DietyApp -configuration Release -sdk iphoneos CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO clean build
+          SCHEME_NAME=$(xcodebuild -list -json | grep -A 10 "schemes" | head -n 2 | tail -n 1 | tr -d '", ')
+          echo "Building scheme: $SCHEME_NAME"
+          xcodebuild -workspace *.xcworkspace -scheme "$SCHEME_NAME" -configuration Release -sdk iphoneos CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO clean build
           mkdir -p Payload
           mv build/Release-iphoneos/*.app Payload/
           zip -r DietyApp.ipa Payload
