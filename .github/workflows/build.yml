@@ -27,16 +27,25 @@ jobs:
           cd ios
           pod install
 
+      - name: Pre-bundle React Native Code
+        run: |
+          mkdir -p ios/main.jsbundle
+          npx react-native bundle \
+            --entry-file index.js \
+            --platform ios \
+            --dev false \
+            --bundle-output ios/main.jsbundle \
+            --assets-dest ios/
+
       - name: Build with Xcode
+        env:
+          SKIP_BUNDLING: 1
         run: |
           cd ios
-          NODE_PATH=$(which node)
-          echo "Node path: $NODE_PATH"
           xcodebuild -workspace *.xcworkspace \
                      -scheme DietyApp \
                      -configuration Release \
                      -sdk iphoneos \
-                     NODE_BINARY="$NODE_PATH" \
                      CODE_SIGN_IDENTITY="" \
                      CODE_SIGNING_REQUIRED=NO \
                      CODE_SIGNING_ALLOWED=NO \
