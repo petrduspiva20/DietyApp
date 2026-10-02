@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "DietyApp",
+    "slug": "DietyApp",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.diety.app",
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "location",
+          "fetch",
+          "location",
+          "fetch"
+        ],
+        "NSLocationWhenInUseUsageDescription": "Aplikace potřebuje přístup k GPS pro detekci polohy a přejezdů.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Aplikace potřebuje sledovat polohu na pozadí pro automatický výpočet diet.",
+        "NSLocationAlwaysUsageDescription": "Aplikace potřebuje sledovat polohu na pozadí pro automatický výpočet diet.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "6c9e5df1-913d-4c2c-9d07-afd379bd9899"
+      }
+    }
+  }
+}
