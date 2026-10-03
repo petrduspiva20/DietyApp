@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, ScrollView, SafeAreaView, Alert, Share } from 'react-native';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -11,10 +11,20 @@ export default function App() {
   const [gpsActive, setGpsActive] = useState(false);
   const [currentCoords, setCurrentCoords] = useState(null);
 
+  // Okamžitá paměť v RAM pro čas vjezdu i aktuální stát (řeší React closures)
+  const foreignEntryRef = useRef(null);
+  const currentCountryRef = useRef('CZ');
+
   useEffect(() => {
     initGps();
     loadLogs();
+    loadSavedData();
   }, []);
+
+  const loadSavedData = async () => {
+    const savedEntry = await AsyncStorage.getItem('foreign_entry_time');
+    if (savedEntry) foreignEntryRef.current = savedEntry;
+  };
 
   const loadLogs = async () => {
     const savedLogs = await AsyncStorage.getItem('app_logs');
@@ -36,7 +46,6 @@ export default function App() {
 
       setGpsActive(true);
 
-      // Sledování polohy – kontrola každých 50 metrů
       Location.watchPositionAsync(
         { accuracy: Location.Accuracy.High, distanceInterval: 50 },
         async (location) => {
@@ -51,34 +60,34 @@ export default function App() {
     }
   };
 
-  // Detekcja státu s matematickou pojistkou pro ČR
+  // Detekce státu s RAM pamětí (žádné staré uzavřené proměnné)
   const evaluateGlobalCountry = async (coords) => {
     try {
       const { latitude, longitude } = coords;
       const now = new Date();
-      const foreignEntryStr = await AsyncStorage.getItem('foreign_entry_time');
 
-      // 1. MATEMATICKÁ POJISTKA PRO ČR: 
-      // Pokud se souřadnice nacházejí uvnitř hranic ČR (zeměpisná šířka 48.5 až 51.1, délka 12.0 až 18.9)
+      // 1. MATEMATICKÁ POJISTKA PRO ČR (Hranice ČR)
       const isInsideCZ = latitude >= 48.5 && latitude <= 51.1 && longitude >= 12.0 && longitude <= 18.9;
 
       if (isInsideCZ) {
-        // Pokud jsme v ČR a v paměti visí čas, že jsme venku -> OKAMŽITĚ NÁVRAT DO CZ
-        if (foreignEntryStr && currentCountry !== 'CZ') {
-          const oldCountry = currentCountry !== 'CZ' ? currentCountry : 'zahraničí';
+        // Pokud jsme v CZ a v RAM visí čas, že jsme venku -> OKAMŽITĚ NÁVRAT DO CZ
+        if (foreignEntryRef.current && currentCountryRef.current !== 'CZ') {
+          const oldCountry = currentCountryRef.current;
+          
+          currentCountryRef.current = 'CZ';
           setCurrentCountry('CZ');
 
-          const entryTime = new Date(foreignEntryStr);
+          const entryTime = new Date(foreignEntryRef.current);
           const diffMins = Math.floor((now - entryTime) / (1000 * 60));
           const hours = (diffMins / 60).toFixed(1);
           const note = `Návrat do CZ z ${oldCountry} (GPS Pojistka) | Stráveno venku: ${hours} h`;
 
+          foreignEntryRef.current = null;
           await AsyncStorage.removeItem('foreign_entry_time');
           await sendLog('Přejezd hranic', 'CZ', note);
           await loadLogs();
           return;
-        } else if (currentCountry === 'CZ') {
-          // Už jsme v CZ, nic se nemění
+        } else if (currentCountryRef.current === 'CZ') {
           return;
         }
       }
@@ -90,14 +99,19 @@ export default function App() {
         let countryCode = results[0].isoCountryCode; 
         if (!countryCode) return;
 
-        // Pokud geokódování hlásí CZ, ale předchozí blok to nezachytil
-        if (countryCode === 'CZ' && foreignEntryStr && currentCountry !== 'CZ') {
+        // Pojistka, kdyby geokódování hodilo CZ, ale jsme venku
+        if (countryCode === 'CZ' && foreignEntryRef.current && currentCountryRef.current !== 'CZ') {
+          const oldCountry = currentCountryRef.current;
+          
+          currentCountryRef.current = 'CZ';
           setCurrentCountry('CZ');
-          const entryTime = new Date(foreignEntryStr);
+
+          const entryTime = new Date(foreignEntryRef.current);
           const diffMins = Math.floor((now - entryTime) / (1000 * 60));
           const hours = (diffMins / 60).toFixed(1);
-          const note = `Návrat do CZ z ${currentCountry} (Geocode) | Stráveno venku: ${hours} h`;
+          const note = `Návrat do CZ z ${oldCountry} (Geocode) | Stráveno venku: ${hours} h`;
 
+          foreignEntryRef.current = null;
           await AsyncStorage.removeItem('foreign_entry_time');
           await sendLog('Přejezd hranic', 'CZ', note);
           await loadLogs();
@@ -105,20 +119,25 @@ export default function App() {
         }
 
         // Standardní změna státu
-        if (countryCode !== currentCountry) {
-          const oldCountry = currentCountry;
+        if (countryCode !== currentCountryRef.current) {
+          const oldCountry = currentCountryRef.current;
+          
+          currentCountryRef.current = countryCode;
           setCurrentCountry(countryCode);
 
           if (countryCode !== 'CZ' && oldCountry === 'CZ') {
-            await AsyncStorage.setItem('foreign_entry_time', now.toISOString());
+            const timeStr = now.toISOString();
+            foreignEntryRef.current = timeStr;
+            await AsyncStorage.setItem('foreign_entry_time', timeStr);
             await sendLog('Přejezd hranic', countryCode, `Vjezd do ${countryCode} (Globální GPS)`);
           } else if (countryCode === 'CZ' && oldCountry !== 'CZ') {
             let note = `Návrat do CZ z ${oldCountry} (Globální GPS)`;
-            if (foreignEntryStr) {
-              const entryTime = new Date(foreignEntryStr);
+            if (foreignEntryRef.current) {
+              const entryTime = new Date(foreignEntryRef.current);
               const diffMins = Math.floor((now - entryTime) / (1000 * 60));
               const hours = (diffMins / 60).toFixed(1);
               note += ` | Stráveno venku: ${hours} h`;
+              foreignEntryRef.current = null;
               await AsyncStorage.removeItem('foreign_entry_time');
             }
             await sendLog('Přejezd hranic', 'CZ', note);
