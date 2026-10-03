@@ -21,6 +21,9 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Ensure expo-sms is installed
+        run: npx expo install expo-sms
+
       - name: Run Expo prebuild
         run: npx expo prebuild --platform ios --clean
 
