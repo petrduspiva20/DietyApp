@@ -12,7 +12,10 @@
         "UIBackgroundModes": [
           "location",
           "fetch"
-        ]
+        ],
+        "NSLocationWhenInUseUsageDescription": "Aplikace potřebuje přístup k poloze pro správné fungování geofencingu a zaznamenávání hranic.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Aplikace potřebuje přístup k poloze na pozadí pro automatické detekování přechodu hranic.",
+        "NSLocationAlwaysUsageDescription": "Aplikace potřebuje sledovat polohu na pozadí pro správnou funkci geofencingu."
       }
     },
     "extra": {
