@@ -2,12 +2,12 @@ name: Build Unsigned iOS IPA
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
   build-ios:
-    runs-on: macos-14
+    runs-on: macos-latest
 
     steps:
       - name: Checkout repository
@@ -17,42 +17,38 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'npm'
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
-      - name: Prebuild Expo iOS Project
+      - name: Run Expo prebuild (Generate ios folder)
         run: npx expo prebuild --platform ios
 
-      - name: Patch Xcode Project for No Signing
+      - name: Install CocoaPods
         run: |
           cd ios
-          sed -i '' 's/CODE_SIGNING_ALLOWED = YES/CODE_SIGNING_ALLOWED = NO/g' DietyApp.xcodeproj/project.pbxproj || true
-          sed -i '' 's/CODE_SIGN_IDENTITY = "iPhone Developer"/CODE_SIGN_IDENTITY = ""/g' DietyApp.xcodeproj/project.pbxproj || true
+          pod install
 
-      - name: Build Xcode App (Unsigned)
+      - name: Build Xcode Project (Unsigned)
         run: |
-          cd ios
-          xcodebuild -workspace DietyApp.xcworkspace \
+          xcodebuild -workspace ios/DietyApp.xcworkspace \
                      -scheme DietyApp \
                      -configuration Release \
                      -sdk iphoneos \
-                     -derivedDataPath build \
-                     CODE_SIGN_IDENTITY="" \
-                     CODE_SIGNING_REQUIRED=NO \
                      CODE_SIGNING_ALLOWED=NO \
-                     PROVISIONING_PROFILE_SPECIFIER="" \
-                     AD_HOC_CODE_SIGNING_ALLOWED=YES \
-                     build
+                     CODE_SIGNING_REQUIRED=NO \
+                     CODE_SIGN_IDENTITY="" \
+                     -derivedDataPath build
 
-      - name: Package IPA
+      - name: Create IPA Package
         run: |
           mkdir -p Payload
-          cp -R ios/build/Build/Products/Release-iphoneos/DietyApp.app Payload/
-          zip -r DietyApp-Unsigned.ipa Payload
+          cp -r build/Build/Products/Release-iphoneos/DietyApp.app Payload/
+          zip -r DietyApp.ipa Payload
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
           name: DietyApp-Unsigned
-          path: DietyApp-Unsigned.ipa
+          path: DietyApp.ipa
