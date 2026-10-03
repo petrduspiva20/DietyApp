@@ -24,16 +24,7 @@ jobs:
       - name: Prebuild Expo iOS project
         run: npx expo prebuild --platform ios --no-install
 
-      - name: Export JS Bundle for iOS
-        run: |
-          mkdir -p ios/main.jsbundle
-          npx expo export:embed \
-            --platform ios \
-            --dev false \
-            --bundle-output ios/main.jsbundle \
-            --assets-dest ios/
-
-      - name: Build Xcode Project (Unsigned)
+      - name: Build Xcode Project with JS Bundle
         run: |
           cd ios
           xcodebuild -workspace DietyApp.xcworkspace \
@@ -43,8 +34,7 @@ jobs:
                      -derivedDataPath build \
                      CODE_SIGN_IDENTITY="" \
                      CODE_SIGNING_REQUIRED=NO \
-                     CODE_SIGNING_ALLOWED=NO \
-                     SKIP_BUNDLING=1
+                     CODE_SIGNING_ALLOWED=NO
 
       - name: Package IPA
         run: |
