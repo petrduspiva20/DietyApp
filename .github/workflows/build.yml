@@ -26,7 +26,10 @@ jobs:
 
       - name: Generate JS Bundle
         run: |
-          npx react-native bundle --platform ios --dev false --entry-file index.js --bundle-output ios/DietyApp/main.jsbundle --assets-dest ios/DietyApp
+          # Vytvoří cílovou složku pro bundle, pokud neexistuje
+          mkdir -p ios/DietyApp
+          # Použití expo export / react-native bundle s kořenem projektu
+          npx react-native bundle --platform ios --dev false --entry-file node_modules/expo/AppEntry.js --bundle-output ios/DietyApp/main.jsbundle --assets-dest ios/DietyApp
 
       - name: Install CocoaPods
         run: |
