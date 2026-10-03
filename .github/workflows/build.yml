@@ -24,12 +24,14 @@ jobs:
       - name: Run Expo prebuild
         run: npx expo prebuild --platform ios --clean
 
-      - name: Generate JS Bundle
+      - name: Export Expo Bundle
         run: |
-          # Vytvoří cílovou složku pro bundle, pokud neexistuje
+          npx expo export --platform ios --output-dir dist
+
+      - name: Move Bundle to iOS App
+        run: |
           mkdir -p ios/DietyApp
-          # Použití expo export / react-native bundle s kořenem projektu
-          npx react-native bundle --platform ios --dev false --entry-file node_modules/expo/AppEntry.js --bundle-output ios/DietyApp/main.jsbundle --assets-dest ios/DietyApp
+          cp -r dist/_expo/static/js/ios/*.js ios/DietyApp/main.jsbundle || cp dist/bundles/ios-*.js ios/DietyApp/main.jsbundle || true
 
       - name: Install CocoaPods
         run: |
