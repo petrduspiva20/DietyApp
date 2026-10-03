@@ -24,10 +24,6 @@ jobs:
       - name: Run Expo prebuild
         run: npx expo prebuild --platform ios --clean
 
-      - name: Bundle React Native JS
-        run: |
-          npx react-native bundle --platform ios --dev false --entry-file index.js --bundle-output ios/DietyApp/main.jsbundle --assets-dest ios
-
       - name: Install CocoaPods
         run: |
           cd ios
