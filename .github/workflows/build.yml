@@ -21,8 +21,8 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Run Expo prebuild (Generate ios folder)
-        run: npx expo prebuild --platform ios
+      - name: Run Expo prebuild
+        run: npx expo prebuild --platform ios --clean
 
       - name: Install CocoaPods
         run: |
@@ -38,6 +38,7 @@ jobs:
                      CODE_SIGNING_ALLOWED=NO \
                      CODE_SIGNING_REQUIRED=NO \
                      CODE_SIGN_IDENTITY="" \
+                     PROVISIONING_PROFILE_SPECIFIER="" \
                      -derivedDataPath build
 
       - name: Create IPA Package
