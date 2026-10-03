@@ -51,21 +51,16 @@ export default function App() {
     }
   };
 
-  // Globální vyhodnocení státu podle souřadnic
+  // Globální vyhodnocení státu podle souřadnic (citlivější a obousměrné)
   const evaluateGlobalBorder = async (coords) => {
-    const { latitude, longitude } = coords;
+    const { longitude } = coords;
     
-    // Přibližná orientační hranice: Pokud je zeměpisná šířka nebo délka za hranicemi ČR
-    // (Německo je na západě a severu od ČR). Pro test v 3uTools:
-    // ČR má západ zhruba na 12.09° E, Německo je západněji nebo severněji.
-    // Jednoduché pravidlo pro test: pokud longitude < 13.0 a latitude > 50.3 (nebo podobně), přepneme do DE.
-    // Nebo si to upravíme podle toho, kam v Německu v 3uTools skáčeš.
-    
-    const isGermany = latitude > 50.3 && longitude < 13.2; // Příklad pro severozápadní hranici
+    // Pokud je zeměpisná délka menší než 13.2, vyhodnotí se Německo (DE), jinak Česká republika (CZ)
+    const isGermany = longitude < 13.2; 
     const newCountry = isGermany ? 'DE' : 'CZ';
 
     if (newCountry !== currentCountry) {
-      setCurrentCountry(newCountry);
+      setCurrentCountry(newCountry); // Okamžitá aktualizace stavu na displeji
       const now = new Date();
       if (newCountry === 'DE') {
         await AsyncStorage.setItem('de_entry_time', now.toISOString());
@@ -82,6 +77,7 @@ export default function App() {
         }
         await sendLog('Přejezd hranic', 'CZ', note);
       }
+      await loadLogs();
     }
   };
 
