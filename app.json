@@ -14,14 +14,9 @@
           "location",
           "fetch"
         ],
-        "NSLocationWhenInUseUsageDescription": "Aplikace potřebuje přístup k poloze pro správné fungování geofencingu.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Aplikace potřebuje přístup k poloze na pozadí pro automatické detekování přechodu hranic.",
-        "NSLocationAlwaysUsageDescription": "Aplikace potřebuje sledovat polohu na pozadí pro správnou funkci geofencingu."
-      }
-    },
-    "extra": {
-      "eas": {
-        "projectId": "6c9e5df1-913d-4c2c-9d07-afd379bd9899"
+        "NSLocationWhenInUseUsageDescription": "Aplikace potřebuje přístup k poloze pro geofencing.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Aplikace potřebuje přístup k poloze na pozadí pro zaznamenávání hranic.",
+        "NSLocationAlwaysUsageDescription": "Aplikace potřebuje sledovat polohu na pozadí."
       }
     }
   }
