@@ -29,21 +29,24 @@ jobs:
           cd ios
           pod install
 
-      - name: Build Xcode Project (Debug Simulator)
+      - name: Build Xcode Project (Development)
         run: |
           xcodebuild -workspace ios/DietyApp.xcworkspace \
                      -scheme DietyApp \
                      -configuration Debug \
-                     -sdk iphonesimulator \
+                     -sdk iphoneos \
                      CODE_SIGNING_ALLOWED=NO \
                      CODE_SIGNING_REQUIRED=NO \
                      CODE_SIGN_IDENTITY="" \
+                     PROVISIONING_PROFILE_SPECIFIER="" \
+                     EXPANDED_CODE_SIGN_IDENTITY="" \
+                     CODE_SIGNING_INJECT_BASE_ENTITLEMENTS=NO \
                      -derivedDataPath build
 
       - name: Create IPA Package
         run: |
           mkdir -p Payload
-          cp -r build/Build/Products/Debug-iphonesimulator/DietyApp.app Payload/
+          cp -r build/Build/Products/Debug-iphoneos/DietyApp.app Payload/
           zip -r DietyApp.ipa Payload
 
       - name: Upload IPA Artifact
