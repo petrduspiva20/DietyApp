@@ -41,11 +41,11 @@ jobs:
           cd ios
           pod install
 
-      - name: Build Xcode Project (Debug)
+      - name: Build Xcode Project (Release)
         run: |
           xcodebuild -workspace ios/DietyApp.xcworkspace \
                      -scheme DietyApp \
-                     -configuration Debug \
+                     -configuration Release \
                      -sdk iphoneos \
                      CODE_SIGNING_ALLOWED=NO \
                      CODE_SIGNING_REQUIRED=NO \
@@ -58,7 +58,7 @@ jobs:
       - name: Create IPA Package
         run: |
           mkdir -p Payload
-          cp -r build/Build/Products/Debug-iphoneos/DietyApp.app Payload/
+          cp -r build/Build/Products/Release-iphoneos/DietyApp.app Payload/
           zip -r DietyApp.ipa Payload
 
       - name: Upload IPA Artifact
