@@ -3,7 +3,7 @@ import { StyleSheet, Text, View, TouchableOpacity, ScrollView, SafeAreaView, Ale
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwRdNgh_-8ru0Ak-6zgkhk40ei0sCaa1YEbQ7iNgO3m3q0VUBIcPVq2f65YJMIC01Ib/exec'; 
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzY4mbgbZOv1IIRi7Qysl7bQUxx9rlTqfcvwjHylPo9XrBaRN5vBQwQNgNxyNe_LvnZDQ/exec';
 
 export default function App() {
   const [logs, setLogs] = useState([]);
@@ -51,44 +51,56 @@ export default function App() {
     }
   };
 
-  // Skutečně globální detekci státu pomocí systémového geokódování
+  // Globální detekce státu s pojistkou pro spolehlivý návrat do CZ
   const evaluateGlobalCountry = async (coords) => {
     try {
       const { latitude, longitude } = coords;
       
-      // Dotaz na iOS: V jakém státě se nacházíme na těchto souřadnicích?
       const results = await Location.reverseGeocodeAsync({ latitude, longitude });
       
       if (results && results.length > 0) {
-        const countryCode = results[0].isoCountryCode; // např. 'CZ', 'DE', 'IT', 'AT', 'PL', 'SK'
-        
-        if (countryCode && countryCode !== currentCountry) {
+        const countryCode = results[0].isoCountryCode || 'CZ'; 
+        const foreignEntryStr = await AsyncStorage.getItem('foreign_entry_time');
+        const now = new Date();
+
+        // Jistotová pojistka: Pokud jsme v CZ (nebo to vrátilo CZ), ale v paměti visí čas, že jsme venku -> VYNUTIT NÁVRAT DO CZ
+        if (countryCode === 'CZ' && foreignEntryStr && currentCountry !== 'CZ') {
           const oldCountry = currentCountry;
-          setCurrentCountry(countryCode); // Okamžitá aktualizace na displeji
-          const now = new Date();
+          setCurrentCountry('CZ');
+          
+          const entryTime = new Date(foreignEntryStr);
+          const diffMins = Math.floor((now - entryTime) / (1000 * 60));
+          const hours = (diffMins / 60).toFixed(1);
+          const note = `Návrat do CZ z ${oldCountry} (Globální GPS) | Stráveno venku: ${hours} h`;
+          
+          await AsyncStorage.removeItem('foreign_entry_time');
+          await sendLog('Přejezd hranic', 'CZ', note);
+          await loadLogs();
+          return;
+        }
+
+        // Běžná změna státu
+        if (countryCode !== currentCountry) {
+          const oldCountry = currentCountry;
+          setCurrentCountry(countryCode);
 
           if (countryCode !== 'CZ' && oldCountry === 'CZ') {
             // Vjezd z Česka do ciziny
             await AsyncStorage.setItem('foreign_entry_time', now.toISOString());
             await sendLog('Přejezd hranic', countryCode, `Vjezd do ${countryCode} (Globální GPS)`);
           } else if (countryCode === 'CZ' && oldCountry !== 'CZ') {
-            // Návrat do České republiky
-            const entryStr = await AsyncStorage.getItem('foreign_entry_time');
+            // Standardní návrat do CZ
             let note = `Návrat do CZ z ${oldCountry} (Globální GPS)`;
-            
-            if (entryStr) {
-              const entryTime = new Date(entryStr);
+            if (foreignEntryStr) {
+              const entryTime = new Date(foreignEntryStr);
               const diffMins = Math.floor((now - entryTime) / (1000 * 60));
               const hours = (diffMins / 60).toFixed(1);
               note += ` | Stráveno venku: ${hours} h`;
               await AsyncStorage.removeItem('foreign_entry_time');
-            } else {
-              note += ' | (Čas vjezdu nebyl zaznamenán)';
             }
-
             await sendLog('Přejezd hranic', 'CZ', note);
-          } else {
-            // Přesun mezi dvěma cizími státy (např. DE -> AT)
+          } else if (countryCode !== 'CZ' && oldCountry !== 'CZ') {
+            // Přesun mezi cizími státy
             await sendLog('Přejezd hranic', countryCode, `Přesun z ${oldCountry} do ${countryCode}`);
           }
           await loadLogs();
