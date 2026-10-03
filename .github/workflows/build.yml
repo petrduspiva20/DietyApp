@@ -21,10 +21,10 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Prebuild Expo iOS project
-        run: npx expo prebuild --platform ios --no-install
+      - name: Generate Native iOS Directory
+        run: npx expo prebuild --platform ios
 
-      - name: Build Xcode Project with JS Bundle
+      - name: Build Xcode Project
         run: |
           cd ios
           xcodebuild -workspace DietyApp.xcworkspace \
