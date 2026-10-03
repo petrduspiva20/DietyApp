@@ -36,13 +36,13 @@ export default function App() {
 
       setGpsActive(true);
 
-      // Sledování polohy v reálném čase (funguje i přes 3uTools)
+      // Sledování polohy v reálném čase – kontrola státu každých 500 metrů
       Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.High, distanceInterval: 10 },
+        { accuracy: Location.Accuracy.High, distanceInterval: 500 },
         async (location) => {
           const coords = location.coords;
           setCurrentCoords(coords);
-          evaluateGlobalBorder(coords);
+          evaluateGlobalCountry(coords);
         }
       );
     } catch (e) {
@@ -51,33 +51,51 @@ export default function App() {
     }
   };
 
-  // Globální vyhodnocení státu podle souřadnic (citlivější a obousměrné)
-  const evaluateGlobalBorder = async (coords) => {
-    const { longitude } = coords;
-    
-    // Pokud je zeměpisná délka menší než 13.2, vyhodnotí se Německo (DE), jinak Česká republika (CZ)
-    const isGermany = longitude < 13.2; 
-    const newCountry = isGermany ? 'DE' : 'CZ';
+  // Skutečně globální detekci státu pomocí systémového geokódování
+  const evaluateGlobalCountry = async (coords) => {
+    try {
+      const { latitude, longitude } = coords;
+      
+      // Dotaz na iOS: V jakém státě se nacházíme na těchto souřadnicích?
+      const results = await Location.reverseGeocodeAsync({ latitude, longitude });
+      
+      if (results && results.length > 0) {
+        const countryCode = results[0].isoCountryCode; // např. 'CZ', 'DE', 'IT', 'AT', 'PL', 'SK'
+        
+        if (countryCode && countryCode !== currentCountry) {
+          const oldCountry = currentCountry;
+          setCurrentCountry(countryCode); // Okamžitá aktualizace na displeji
+          const now = new Date();
 
-    if (newCountry !== currentCountry) {
-      setCurrentCountry(newCountry); // Okamžitá aktualizace stavu na displeji
-      const now = new Date();
-      if (newCountry === 'DE') {
-        await AsyncStorage.setItem('de_entry_time', now.toISOString());
-        await sendLog('Přejezd hranic', 'DE', 'Vjezd do DE (Globální GPS)');
-      } else {
-        const entryStr = await AsyncStorage.getItem('de_entry_time');
-        let note = 'Návrat do CZ (Globální GPS)';
-        if (entryStr) {
-          const entryTime = new Date(entryStr);
-          const diffMins = Math.floor((now - entryTime) / (1000 * 60));
-          const hours = (diffMins / 60).toFixed(1);
-          note += ` | Stráveno v DE: ${hours} h`;
-          await AsyncStorage.removeItem('de_entry_time');
+          if (countryCode !== 'CZ' && oldCountry === 'CZ') {
+            // Vjezd z Česka do ciziny
+            await AsyncStorage.setItem('foreign_entry_time', now.toISOString());
+            await sendLog('Přejezd hranic', countryCode, `Vjezd do ${countryCode} (Globální GPS)`);
+          } else if (countryCode === 'CZ' && oldCountry !== 'CZ') {
+            // Návrat do České republiky
+            const entryStr = await AsyncStorage.getItem('foreign_entry_time');
+            let note = `Návrat do CZ z ${oldCountry} (Globální GPS)`;
+            
+            if (entryStr) {
+              const entryTime = new Date(entryStr);
+              const diffMins = Math.floor((now - entryTime) / (1000 * 60));
+              const hours = (diffMins / 60).toFixed(1);
+              note += ` | Stráveno venku: ${hours} h`;
+              await AsyncStorage.removeItem('foreign_entry_time');
+            } else {
+              note += ' | (Čas vjezdu nebyl zaznamenán)';
+            }
+
+            await sendLog('Přejezd hranic', 'CZ', note);
+          } else {
+            // Přesun mezi dvěma cizími státy (např. DE -> AT)
+            await sendLog('Přejezd hranic', countryCode, `Přesun z ${oldCountry} do ${countryCode}`);
+          }
+          await loadLogs();
         }
-        await sendLog('Přejezd hranic', 'CZ', note);
       }
-      await loadLogs();
+    } catch (e) {
+      console.log('Chyba geokódování:', e);
     }
   };
 
@@ -118,7 +136,7 @@ export default function App() {
             Lat: {currentCoords.latitude.toFixed(4)}, Lon: {currentCoords.longitude.toFixed(4)}
           </Text>
         )}
-        <Text style={styles.subtitle}>Aktuální stav: <Text style={styles.highlight}>{currentCountry}</Text></Text>
+        <Text style={styles.subtitle}>Aktuální stát: <Text style={styles.highlight}>{currentCountry}</Text></Text>
       </View>
 
       <View style={styles.actionRow}>
