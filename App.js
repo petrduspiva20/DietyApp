@@ -36,9 +36,9 @@ export default function App() {
 
       setGpsActive(true);
 
-      // Sledování polohy v reálném čase – kontrola státu každých 500 metrů
+      // Sledování polohy – sníženo na 50 metrů pro okamžitou reakci při přejezdu
       Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.High, distanceInterval: 500 },
+        { accuracy: Location.Accuracy.High, distanceInterval: 50 },
         async (location) => {
           const coords = location.coords;
           setCurrentCoords(coords);
@@ -51,7 +51,7 @@ export default function App() {
     }
   };
 
-  // Globální detekce státu s pojistkou pro spolehlivý návrat do CZ
+  // Zpřesněná globální detekce s okamžitou reakcí na návrat
   const evaluateGlobalCountry = async (coords) => {
     try {
       const { latitude, longitude } = coords;
@@ -59,37 +59,48 @@ export default function App() {
       const results = await Location.reverseGeocodeAsync({ latitude, longitude });
       
       if (results && results.length > 0) {
-        const countryCode = results[0].isoCountryCode || 'CZ'; 
+        let countryCode = results[0].isoCountryCode; 
+        
+        // Záchranná brzda pro ČR: Pokud jsme v obdélníku zhruba odpovídajícím ČR a geokódování zazmatkuje, bereme to jako CZ
+        if (!countryCode && latitude >= 48.5 && latitude <= 51.1 && longitude >= 12.0 && longitude <= 18.9) {
+          countryCode = 'CZ';
+        }
+
+        if (!countryCode) return;
+
         const foreignEntryStr = await AsyncStorage.getItem('foreign_entry_time');
         const now = new Date();
 
-        // Jistotová pojistka: Pokud jsme v CZ (nebo to vrátilo CZ), ale v paměti visí čas, že jsme venku -> VYNUTIT NÁVRAT DO CZ
-        if (countryCode === 'CZ' && foreignEntryStr && currentCountry !== 'CZ') {
-          const oldCountry = currentCountry;
+        // Pokud jsme v CZ, ale v paměti pořád visí čas z ciziny -> OKAMŽITĚ ZAZNAMENAT NÁVRAT DO CZ
+        if (countryCode === 'CZ' && currentCountry !== 'CZ') {
+          const oldCountry = currentCountry !== 'CZ' ? currentCountry : 'zahraničí';
           setCurrentCountry('CZ');
           
-          const entryTime = new Date(foreignEntryStr);
-          const diffMins = Math.floor((now - entryTime) / (1000 * 60));
-          const hours = (diffMins / 60).toFixed(1);
-          const note = `Návrat do CZ z ${oldCountry} (Globální GPS) | Stráveno venku: ${hours} h`;
-          
-          await AsyncStorage.removeItem('foreign_entry_time');
+          let note = `Návrat do CZ z ${oldCountry} (Globální GPS)`;
+          if (foreignEntryStr) {
+            const entryTime = new Date(foreignEntryStr);
+            const diffMins = Math.floor((now - entryTime) / (1000 * 60));
+            const hours = (diffMins / 60).toFixed(1);
+            note += ` | Stráveno venku: ${hours} h`;
+            await AsyncStorage.removeItem('foreign_entry_time');
+          } else {
+            note += ' | (Čas vjezdu nebyl v paměti)';
+          }
+
           await sendLog('Přejezd hranic', 'CZ', note);
           await loadLogs();
           return;
         }
 
-        // Běžná změna státu
+        // Standardní změna státu (např. vjezd do Německa / Itálie atd.)
         if (countryCode !== currentCountry) {
           const oldCountry = currentCountry;
           setCurrentCountry(countryCode);
 
           if (countryCode !== 'CZ' && oldCountry === 'CZ') {
-            // Vjezd z Česka do ciziny
             await AsyncStorage.setItem('foreign_entry_time', now.toISOString());
             await sendLog('Přejezd hranic', countryCode, `Vjezd do ${countryCode} (Globální GPS)`);
           } else if (countryCode === 'CZ' && oldCountry !== 'CZ') {
-            // Standardní návrat do CZ
             let note = `Návrat do CZ z ${oldCountry} (Globální GPS)`;
             if (foreignEntryStr) {
               const entryTime = new Date(foreignEntryStr);
@@ -100,7 +111,6 @@ export default function App() {
             }
             await sendLog('Přejezd hranic', 'CZ', note);
           } else if (countryCode !== 'CZ' && oldCountry !== 'CZ') {
-            // Přesun mezi cizími státy
             await sendLog('Přejezd hranic', countryCode, `Přesun z ${oldCountry} do ${countryCode}`);
           }
           await loadLogs();
