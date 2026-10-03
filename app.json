@@ -3,6 +3,7 @@
     "name": "DietyApp",
     "slug": "DietyApp",
     "version": "1.0.0",
+    "sdkVersion": "51.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "ios": {
@@ -13,7 +14,7 @@
           "location",
           "fetch"
         ],
-        "NSLocationWhenInUseUsageDescription": "Aplikace potřebuje přístup k poloze pro správné fungování geofencingu a zaznamenávání hranic.",
+        "NSLocationWhenInUseUsageDescription": "Aplikace potřebuje přístup k poloze pro správné fungování geofencingu.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Aplikace potřebuje přístup k poloze na pozadí pro automatické detekování přechodu hranic.",
         "NSLocationAlwaysUsageDescription": "Aplikace potřebuje sledovat polohu na pozadí pro správnou funkci geofencingu."
       }
