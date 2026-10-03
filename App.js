@@ -36,7 +36,7 @@ export default function App() {
 
       setGpsActive(true);
 
-      // Sledování polohy – sníženo na 50 metrů pro okamžitou reakci při přejezdu
+      // Sledování polohy – kontrola každých 50 metrů
       Location.watchPositionAsync(
         { accuracy: Location.Accuracy.High, distanceInterval: 50 },
         async (location) => {
@@ -51,48 +51,60 @@ export default function App() {
     }
   };
 
-  // Zpřesněná globální detekce s okamžitou reakcí na návrat
+  // Detekcja státu s matematickou pojistkou pro ČR
   const evaluateGlobalCountry = async (coords) => {
     try {
       const { latitude, longitude } = coords;
-      
+      const now = new Date();
+      const foreignEntryStr = await AsyncStorage.getItem('foreign_entry_time');
+
+      // 1. MATEMATICKÁ POJISTKA PRO ČR: 
+      // Pokud se souřadnice nacházejí uvnitř hranic ČR (zeměpisná šířka 48.5 až 51.1, délka 12.0 až 18.9)
+      const isInsideCZ = latitude >= 48.5 && latitude <= 51.1 && longitude >= 12.0 && longitude <= 18.9;
+
+      if (isInsideCZ) {
+        // Pokud jsme v ČR a v paměti visí čas, že jsme venku -> OKAMŽITĚ NÁVRAT DO CZ
+        if (foreignEntryStr && currentCountry !== 'CZ') {
+          const oldCountry = currentCountry !== 'CZ' ? currentCountry : 'zahraničí';
+          setCurrentCountry('CZ');
+
+          const entryTime = new Date(foreignEntryStr);
+          const diffMins = Math.floor((now - entryTime) / (1000 * 60));
+          const hours = (diffMins / 60).toFixed(1);
+          const note = `Návrat do CZ z ${oldCountry} (GPS Pojistka) | Stráveno venku: ${hours} h`;
+
+          await AsyncStorage.removeItem('foreign_entry_time');
+          await sendLog('Přejezd hranic', 'CZ', note);
+          await loadLogs();
+          return;
+        } else if (currentCountry === 'CZ') {
+          // Už jsme v CZ, nic se nemění
+          return;
+        }
+      }
+
+      // 2. PRO CIZÍ STÁTY POUŽIJEME SYSTEMATICKÉ GECÓDOVÁNÍ
       const results = await Location.reverseGeocodeAsync({ latitude, longitude });
       
       if (results && results.length > 0) {
         let countryCode = results[0].isoCountryCode; 
-        
-        // Záchranná brzda pro ČR: Pokud jsme v obdélníku zhruba odpovídajícím ČR a geokódování zazmatkuje, bereme to jako CZ
-        if (!countryCode && latitude >= 48.5 && latitude <= 51.1 && longitude >= 12.0 && longitude <= 18.9) {
-          countryCode = 'CZ';
-        }
-
         if (!countryCode) return;
 
-        const foreignEntryStr = await AsyncStorage.getItem('foreign_entry_time');
-        const now = new Date();
-
-        // Pokud jsme v CZ, ale v paměti pořád visí čas z ciziny -> OKAMŽITĚ ZAZNAMENAT NÁVRAT DO CZ
-        if (countryCode === 'CZ' && currentCountry !== 'CZ') {
-          const oldCountry = currentCountry !== 'CZ' ? currentCountry : 'zahraničí';
+        // Pokud geokódování hlásí CZ, ale předchozí blok to nezachytil
+        if (countryCode === 'CZ' && foreignEntryStr && currentCountry !== 'CZ') {
           setCurrentCountry('CZ');
-          
-          let note = `Návrat do CZ z ${oldCountry} (Globální GPS)`;
-          if (foreignEntryStr) {
-            const entryTime = new Date(foreignEntryStr);
-            const diffMins = Math.floor((now - entryTime) / (1000 * 60));
-            const hours = (diffMins / 60).toFixed(1);
-            note += ` | Stráveno venku: ${hours} h`;
-            await AsyncStorage.removeItem('foreign_entry_time');
-          } else {
-            note += ' | (Čas vjezdu nebyl v paměti)';
-          }
+          const entryTime = new Date(foreignEntryStr);
+          const diffMins = Math.floor((now - entryTime) / (1000 * 60));
+          const hours = (diffMins / 60).toFixed(1);
+          const note = `Návrat do CZ z ${currentCountry} (Geocode) | Stráveno venku: ${hours} h`;
 
+          await AsyncStorage.removeItem('foreign_entry_time');
           await sendLog('Přejezd hranic', 'CZ', note);
           await loadLogs();
           return;
         }
 
-        // Standardní změna státu (např. vjezd do Německa / Itálie atd.)
+        // Standardní změna státu
         if (countryCode !== currentCountry) {
           const oldCountry = currentCountry;
           setCurrentCountry(countryCode);
