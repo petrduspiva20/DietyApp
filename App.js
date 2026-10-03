@@ -1,149 +1,203 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, SafeAreaView, Alert, Share } from 'react-native';
+import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as SMS from 'expo-sms';
+
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwRdNgh_-8ru0Ak-6zgkhk40ei0sCaa1YEbQ7iNgO3m3q0VUBIcPVq2f65YJMIC01Ib/exec'; 
 
 export default function App() {
   const [logs, setLogs] = useState([]);
   const [currentCountry, setCurrentCountry] = useState('CZ');
+  const [gpsActive, setGpsActive] = useState(false);
+  const [currentCoords, setCurrentCoords] = useState(null);
 
-  // Načtení dat při spuštění
   useEffect(() => {
+    initGps();
     loadLogs();
   }, []);
 
   const loadLogs = async () => {
+    const savedLogs = await AsyncStorage.getItem('app_logs');
+    if (savedLogs) setLogs(JSON.parse(savedLogs));
+  };
+
+  const initGps = async () => {
     try {
-      const saved = await AsyncStorage.getItem('diety_logs');
-      if (saved) setLogs(JSON.parse(saved));
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const saveLogs = async (newLogs) => {
-    setLogs(newLogs);
-    await AsyncStorage.setItem('diety_logs', JSON.stringify(newLogs));
-  };
-
-  // Přidání události
-  const addLog = (type, country, note) => {
-    const newEntry = {
-      id: Date.now().toString(),
-      timestamp: new Date().toISOString(),
-      type, // 'START', 'END', 'BORDER'
-      country,
-      note
-    };
-    const updated = [newEntry, ...logs];
-    saveLogs(updated);
-    if (country) setCurrentCountry(country);
-  };
-
-  // 🧪 TESTOVACÍ TLAČÍTKO: Simulace přechodu hranic
-  const handleTestBorder = () => {
-    const nextCountry = currentCountry === 'CZ' ? 'DE' : 'CZ';
-    addLog('BORDER', nextCountry, `Překročení hranic (${nextCountry}) - Test`);
-    Alert.alert("🧪 Test přechodu", `Nasimulován přechod hranice do ${nextCountry}`);
-  };
-
-  // Generování strukturovaného výkazu s výpočtem diet
-  const generateReport = () => {
-    const sorted = [...logs].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-    let lines = [];
-    let borderTimes = [];
-
-    sorted.forEach((item) => {
-      const timeStr = new Date(item.timestamp).toLocaleString('cs-CZ', {
-        day: 'numeric', month: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
-      });
-
-      if (item.type === 'START') lines.push(`🚩 Odjezd z firmy (CZ): ${timeStr}`);
-      else if (item.type === 'END') lines.push(`🏁 Příjezd na firmu (CZ): ${timeStr}`);
-      else if (item.type === 'BORDER') {
-        borderTimes.push(new Date(item.timestamp));
-        lines.push(`🌐 Překročení hranic (${item.country}): ${timeStr}`);
+      const { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
+      if (fgStatus !== 'granted') {
+        Alert.alert('Oprávnění', 'Přístup k poloze nebyl povolen.');
+        return;
       }
-    });
 
-    // Výpočet času v zahraničí (od 1. do posledního přechodu)
-    let foreignText = "0 hod 0 min";
-    if (borderTimes.length >= 2) {
-      const diffMs = borderTimes[borderTimes.length - 1] - borderTimes[0];
-      const totalMins = Math.round(diffMs / (1000 * 60));
-      const hours = Math.floor(totalMins / 60);
-      const mins = totalMins % 60;
-      foreignText = `${hours} hod ${mins} min`;
+      const { status: bgStatus } = await Location.requestBackgroundPermissionsAsync();
+      if (bgStatus !== 'granted') {
+        console.log('Pozadí nepovoleno, ale lokální sledování poběží.');
+      }
+
+      setGpsActive(true);
+
+      // Sledování polohy v reálném čase (funguje i přes 3uTools)
+      Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.High, distanceInterval: 10 },
+        async (location) => {
+          const coords = location.coords;
+          setCurrentCoords(coords);
+          evaluateGlobalBorder(coords);
+        }
+      );
+    } catch (e) {
+      console.log('Chyba GPS:', e);
+      setGpsActive(false);
     }
-
-    return `=== VÝKAZ JÍZDY A DIET ===\n\n${lines.join('\n')}\n\n⏱ Celkový čas v zahraničí: ${foreignText}`;
   };
 
-  // Odeslání šéfovi
-  const handleSendReport = async () => {
-    const isAvailable = await SMS.isAvailableAsync();
-    if (isAvailable) {
-      await SMS.sendSMSAsync([], generateReport());
-    } else {
-      Alert.alert("Chyba", "SMS služby nejsou dostupné.");
+  // Globální vyhodnocení státu podle souřadnic
+  const evaluateGlobalBorder = async (coords) => {
+    const { latitude, longitude } = coords;
+    
+    // Přibližná orientační hranice: Pokud je zeměpisná šířka nebo délka za hranicemi ČR
+    // (Německo je na západě a severu od ČR). Pro test v 3uTools:
+    // ČR má západ zhruba na 12.09° E, Německo je západněji nebo severněji.
+    // Jednoduché pravidlo pro test: pokud longitude < 13.0 a latitude > 50.3 (nebo podobně), přepneme do DE.
+    // Nebo si to upravíme podle toho, kam v Německu v 3uTools skáčeš.
+    
+    const isGermany = latitude > 50.3 && longitude < 13.2; // Příklad pro severozápadní hranici
+    const newCountry = isGermany ? 'DE' : 'CZ';
+
+    if (newCountry !== currentCountry) {
+      setCurrentCountry(newCountry);
+      const now = new Date();
+      if (newCountry === 'DE') {
+        await AsyncStorage.setItem('de_entry_time', now.toISOString());
+        await sendLog('Přejezd hranic', 'DE', 'Vjezd do DE (Globální GPS)');
+      } else {
+        const entryStr = await AsyncStorage.getItem('de_entry_time');
+        let note = 'Návrat do CZ (Globální GPS)';
+        if (entryStr) {
+          const entryTime = new Date(entryStr);
+          const diffMins = Math.floor((now - entryTime) / (1000 * 60));
+          const hours = (diffMins / 60).toFixed(1);
+          note += ` | Stráveno v DE: ${hours} h`;
+          await AsyncStorage.removeItem('de_entry_time');
+        }
+        await sendLog('Přejezd hranic', 'CZ', note);
+      }
+    }
+  };
+
+  const handleDeparture = async () => {
+    await sendLog('Odjezd z firmy', 'CZ', 'Start trasy (Ručně)');
+    await loadLogs();
+    Alert.alert('Zaznamenáno', 'Odjezd z firmy byl uložen a odeslán.');
+  };
+
+  const handleArrival = async () => {
+    await sendLog('Příjezd na firmu', currentCountry, 'Konec trasy (Ručně)');
+    await loadLogs();
+    Alert.alert('Zaznamenáno', 'Příjezd na firmu byl uložen a odeslán.');
+  };
+
+  const shareReport = async () => {
+    if (logs.length === 0) {
+      Alert.alert('Info', 'Zatím nemáš žádné záznamy.');
+      return;
+    }
+    const reportText = logs.join('\n');
+    try {
+      await Share.share({ message: `Výkaz diet:\n\n${reportText}` });
+    } catch (e) {
+      Alert.alert('Chyba', 'Nedaří se sdílet.');
     }
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>🚛 Diety & GPS</Text>
-      <Text style={styles.subtitle}>Aktuální stav: <Text style={styles.bold}>{currentCountry}</Text></Text>
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.title}>🚛 Diety & GPS</Text>
+        <Text style={styles.status}>
+          GPS Sledování: <Text style={{ color: gpsActive ? '#00E676' : '#FF9800' }}>{gpsActive ? 'AKTIVNÍ' : 'NEAKTIVNÍ'}</Text>
+        </Text>
+        {currentCoords && (
+          <Text style={styles.coordsText}>
+            Lat: {currentCoords.latitude.toFixed(4)}, Lon: {currentCoords.longitude.toFixed(4)}
+          </Text>
+        )}
+        <Text style={styles.subtitle}>Aktuální stav: <Text style={styles.highlight}>{currentCountry}</Text></Text>
+      </View>
 
-      {/* Tlačítka Start / Konec */}
-      <View style={styles.row}>
-        <TouchableOpacity style={[styles.btn, styles.btnStart]} onPress={() => addLog('START', 'CZ', 'Start trasu (Ručně)')}>
-          <Text style={styles.btnText}>🏁 Start trasu</Text>
+      <View style={styles.actionRow}>
+        <TouchableOpacity style={[styles.actionBtn, styles.btnStart]} onPress={handleDeparture}>
+          <Text style={styles.actionBtnText}>🏁 Start trasy</Text>
+          <Text style={styles.actionBtnSubtext}>Odjezd z firmy</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.btn, styles.btnEnd]} onPress={() => addLog('END', 'CZ', 'Konec trasu (Ručně)')}>
-          <Text style={styles.btnText}>🏠 Konec trasu</Text>
+
+        <TouchableOpacity style={[styles.actionBtn, styles.btnStop]} onPress={handleArrival}>
+          <Text style={styles.actionBtnText}>🏠 Konec trasy</Text>
+          <Text style={styles.actionBtnSubtext}>Příjezd na firmu</Text>
         </TouchableOpacity>
       </View>
 
-      {/* 🧪 Testovací tlačítko pro simulaci hranice */}
-      <TouchableOpacity style={styles.btnTest} onPress={handleTestBorder}>
-        <Text style={styles.btnTextTest}>🧪 Test: Simulovat přechod (DE/CZ)</Text>
+      <TouchableOpacity style={styles.btnBoss} onPress={shareReport}>
+        <Text style={styles.btnText}>📲 Odeslat výkaz šéfovi</Text>
       </TouchableOpacity>
 
-      {/* Odeslat výkaz */}
-      <TouchableOpacity style={styles.btnSend} onPress={handleSendReport}>
-        <Text style={styles.btnText}>📱 Odeslat výkaz šéfovi</Text>
-      </TouchableOpacity>
-
-      {/* Deník */}
-      <Text style={styles.sectionTitle}>Deník přejezdů a událostí:</Text>
-      <ScrollView style={styles.logsContainer}>
-        {logs.map((item) => (
-          <View key={item.id} style={styles.logCard}>
-            <Text style={styles.logText}>
-              {new Date(item.timestamp).toLocaleString('cs-CZ')} - {item.note}
-            </Text>
-          </View>
-        ))}
+      <Text style={styles.logHeader}>Deník přejezdů a událostí:</Text>
+      <ScrollView style={styles.logContainer}>
+        {logs.length === 0 ? (
+          <Text style={styles.emptyText}>Žádné záznamy. Zkus stisknout tlačítko Start trasy.</Text>
+        ) : (
+          logs.map((log, index) => (
+            <View key={index} style={styles.logItem}>
+              <Text style={styles.logText}>{log}</Text>
+            </View>
+          ))
+        )}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
+async function sendLog(type, country, note) {
+  const now = new Date();
+  const payload = { typ: type, stat: country, poznamka: note, cas: now.toISOString() };
+
+  try {
+    await fetch(SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const saved = await AsyncStorage.getItem('app_logs');
+    const logs = saved ? JSON.parse(saved) : [];
+    const timeStr = now.toLocaleDateString('cs-CZ') + ' ' + now.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' });
+    const newLogs = [`${timeStr} - ${type} (${country}) - ${note}`, ...logs];
+    
+    await AsyncStorage.setItem('app_logs', JSON.stringify(newLogs));
+  } catch (e) {
+    console.error(e);
+  }
+}
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a', paddingTop: 60, paddingHorizontal: 16 },
-  title: { fontSize: 24, fontWeight: 'bold', color: '#fff', textAlign: 'center' },
-  subtitle: { fontSize: 16, color: '#94a3b8', textAlign: 'center', marginBottom: 20 },
-  bold: { color: '#22c55e', fontWeight: 'bold' },
-  row: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-  btn: { flex: 0.48, padding: 16, borderRadius: 12, alignItems: 'center' },
-  btnStart: { backgroundColor: '#15803d' },
-  btnEnd: { backgroundColor: '#b91c1c' },
-  btnTest: { backgroundColor: '#334155', padding: 12, borderRadius: 12, alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: '#64748b' },
-  btnSend: { backgroundColor: '#0284c7', padding: 16, borderRadius: 12, alignItems: 'center', marginBottom: 20 },
-  btnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
-  btnTextTest: { color: '#cbd5e1', fontWeight: '600', fontSize: 14 },
-  sectionTitle: { color: '#cbd5e1', fontSize: 16, fontWeight: 'bold', marginBottom: 10 },
-  logsContainer: { flex: 1 },
-  logCard: { backgroundColor: '#1e293b', padding: 12, borderRadius: 8, marginBottom: 8, borderWidth: 1, borderColor: '#334155' },
-  logText: { color: '#f1f5f9', fontSize: 13 }
+  container: { flex: 1, backgroundColor: '#0A0E1A', padding: 20 },
+  header: { marginTop: 20, marginBottom: 15, alignItems: 'center' },
+  title: { fontSize: 24, fontWeight: 'bold', color: '#FFF' },
+  status: { fontSize: 14, color: '#AAA', marginTop: 5 },
+  coordsText: { fontSize: 12, color: '#4CAF50', marginTop: 4 },
+  subtitle: { fontSize: 18, color: '#AAA', marginTop: 10 },
+  highlight: { color: '#00E676', fontWeight: 'bold' },
+  actionRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 },
+  actionBtn: { flex: 0.48, padding: 15, borderRadius: 12, alignItems: 'center' },
+  btnStart: { backgroundColor: '#2E7D32' },
+  btnStop: { backgroundColor: '#C62828' },
+  actionBtnText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
+  actionBtnSubtext: { color: '#DDD', fontSize: 11, marginTop: 3 },
+  btnBoss: { backgroundColor: '#0288D1', padding: 14, borderRadius: 12, alignItems: 'center', marginBottom: 20 },
+  btnText: { color: '#FFF', fontSize: 15, fontWeight: 'bold' },
+  logHeader: { color: '#8E8E93', fontSize: 14, fontWeight: '600', marginBottom: 10 },
+  logContainer: { flex: 1 },
+  logItem: { backgroundColor: '#1C2333', padding: 12, borderRadius: 10, marginBottom: 8 },
+  logText: { color: '#E1E6ED', fontSize: 14 },
+  emptyText: { color: '#555', textAlign: 'center', marginTop: 30 }
 });
